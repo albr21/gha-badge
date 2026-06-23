@@ -1,0 +1,262 @@
+name: gha-badge
+
+description: |-
+  GitHub Action to manage shields.io badge lifecycle.
+  All-in-one action that:
+    1. Sets up the shields.io-compatible server (gha-setup-shields)
+    2. Generates the badge image against shields.io API (gha-create-shields-badge)
+    3. Pushes the resulting file to a target repository (gha-git-push)
+
+author: albr21
+branding:
+  icon: award
+  color: purple
+
+inputs:
+  label:
+    description: Left-hand side text of the badge
+    required: true
+  message:
+    description: Right-hand side text of the badge
+    required: true
+  color:
+    description: |-
+      Background color of the right part (hex, rgb, rgba, hsl, hsla and css named colors supported)
+    required: true
+  label-color:
+    description: |-
+      Background color of the left part (hex, rgb, rgba, hsl, hsla and css named colors supported)
+    required: false
+    default: "555"
+  logo:
+    description: |-
+      Named logo from Simple Icons (e.g. github, docker, python).
+      See https://simpleicons.org/ for the full list.
+    required: false
+    default: ""
+  logo-color:
+    description: |-
+      Color for the logo (hex, rgb, rgba, hsl, hsla and css named colors supported)
+      Supported for simple-icons logos but not for custom logos
+    required: false
+    default: ""
+  style:
+    description: |-
+      Badge style (flat, flat-square, plastic, for-the-badge, social)
+      Default is "flat"
+    required: false
+    default: flat
+  format:
+    description: |-
+      Output format (svg, png, jpg, jpeg)
+      Default is "svg"
+    required: false
+    default: svg
+  base-url:
+    description: |-
+      Base URL of the shields.io-compatible server
+      Used only when `local` is set to false. Default is the public shields.io server.
+    required: false
+    default: "https://img.shields.io"
+  local:
+    description: |-
+      Whether to setup a local shields.io-compatible server instead of the public one.
+      If set to true, the action will start a local server and use it to generate the badge.
+    required: false
+    default: "false"
+  image:
+    description: |-
+      Docker image to use for the shields.io service
+      Used only when `local` is set to true. Default is the official shields.io image.
+    required: false
+    default: "ghcr.io/badges/shields:latest"
+  port:
+    description: |-
+      Host port to bind the shields.io service on
+      Used only when `local` is set to true. Default is 8080.
+    required: false
+    default: "8080"
+  container-name:
+    description: |-
+      Name of the Docker container (avoids conflicts on self-hosted runners)
+      Used only when `local` is set to true.
+    required: false
+    default: shields-local
+  startup-timeout:
+    description: |-
+      Seconds to wait for the service to become ready before failing
+      Used only when `local` is set to true.
+    required: false
+    default: "60"
+  target-path:
+    description: Target path in the repository to push the badge file to
+    required: false
+    default: "badge.svg"
+  target-repo:
+    description: Target repository in owner/repo format (defaults to current repository)
+    required: false
+    default: ${{ github.repository }}
+  target-branch:
+    description: Target branch to push the files to
+    required: false
+    default: main
+  commit-message:
+    description: Git commit message
+    required: false
+    default: "chore: update files [skip ci]"
+  commit-author-name:
+    description: Git author name
+    required: false
+    default: github-actions[bot]
+  commit-author-email:
+    description: Git author email
+    required: false
+    default: github-actions[bot]@users.noreply.github.com
+  auth-method:
+    description: |-
+      Authentication method: token, ssh, or none
+      When using 'none', the action assumes the target repo is public
+      When using 'token', input 'github-token' is required
+      When using 'ssh', input 'ssh-key' is required,
+                        input 'hosts' or 'known-hosts' is required
+                        input 'ssh-key-types' can be provided
+    required: false
+    default: token
+  github-token:
+    description: |-
+      GitHub token (PAT or GITHUB_TOKEN). Required when auth-method is 'token'
+    required: false
+    default: ""
+  ssh-key:
+    description: |-
+      SSH private key for git operations. Required when auth-method is 'ssh'
+    required: false
+    default: ""
+  hosts:
+    description: |-
+      List of hosts to scan and add to the known_hosts file for SSH authentication.
+      Can be a list of hosts on separate lines.
+
+      This input is used to avoid the need to manually add hosts to the known_hosts file
+      by using `ssh-keyscan`. It is not recommended to use because of the security risks involved.
+      It exposes to a Man-in-the-Middle attack. It is recommended to use the `known-hosts` input instead.
+    required: false
+    default: ""
+  known-hosts:
+    description: |-
+      Content of the known_hosts file for SSH. Used when auth-method is 'ssh'.
+      This is more secure than using the 'hosts' input which relies on ssh-keyscan.
+    required: false
+  ssh-key-types:
+    description: |-
+      Comma-separated list of key types to scan for (e.g., "rsa,ed25519")
+    required: false
+    default: "rsa,ed25519"
+  github-hostname:
+    description: GitHub hostname
+    required: false
+    default: github.com
+  max-retries:
+    description: |-
+      Maximum number of retries for git push operation in case of failure
+      (e.g.due to network issues or rate limiting).
+    required: false
+    default: "3"
+  backoff:
+    description: |-
+      Backoff base time in seconds for exponential backoff between retries for
+      git push operation in case of failure.
+    required: false
+    default: "5"
+  command-line-interpreter:
+    description: |-
+      Command line interpreter.
+      By default, it uses `bash`, but you can change it to `sh`.
+    required: false
+    default: bash
+    
+runs:
+  using: composite
+  steps:
+    - name: Validate Inputs
+      uses: albr21/gha-type-guard@1.0.0
+      with:
+        payload: |-
+          [
+            {"value": "${{ inputs.label }}", "type": "string"},
+            {"value": "${{ inputs.message }}", "type": "string"},
+            {"value": "${{ inputs.color }}", "type": "string"},
+            {"value": "${{ inputs.label-color }}", "type": "string"},
+            {"value": "${{ inputs.logo }}", "type": "string"},
+            {"value": "${{ inputs.logo-color }}", "type": "string"},
+            {"value": "${{ inputs.style }}", "type": "enum", "enumValues": ["flat", "flat-square", "plastic", "for-the-badge", "social"]},
+            {"value": "${{ inputs.format }}", "type": "enum", "enumValues": ["svg", "png", "jpg", "jpeg"]},
+            {"value": "${{ inputs.base-url }}", "type": "string"},
+            {"value": "${{ inputs.local }}", "type": "boolean"},
+            {"value": "${{ inputs.image }}", "type": "string"},
+            {"value": "${{ inputs.port }}", "type": "integer"},
+            {"value": "${{ inputs.container-name }}", "type": "string"},
+            {"value": "${{ inputs.startup-timeout }}", "type": "integer"},
+            {"value": "${{ inputs.target-path }}", "type": "string"},
+            {"value": "${{ inputs.target-repo }}", "type": "string"},
+            {"value": "${{ inputs.target-branch }}", "type": "string"},
+            {"value": "${{ inputs.commit-message }}", "type": "string"},
+            {"value": "${{ inputs.commit-author-name }}", "type": "string"},
+            {"value": "${{ inputs.commit-author-email }}", "type": "string"},
+            {"value": "${{ inputs.auth-method }}", "type": "enum", "enumValues": ["token", "ssh", "none"]},
+            {"value": "${{ inputs.github-token }}", "type": "string"},
+            {"value": "${{ inputs.ssh-key }}", "type": "string"},
+            {"value": "${{ inputs.hosts }}", "type": "string"},
+            {"value": "${{ inputs.known-hosts }}", "type": "string"},
+            {"value": "${{ inputs.ssh-key-types }}", "type": "string"},
+            {"value": "${{ inputs.github-hostname }}", "type": "string"},
+            {"value": "${{ inputs.max-retries }}", "type": "integer"},
+            {"value": "${{ inputs.backoff }}", "type": "integer"},
+            {"value": "${{ inputs.command-line-interpreter }}", "type": "enum", "enumValues": ["bash", "sh"]}
+          ]
+
+    - name: Setup Shields.io-compatible server
+      if: ${{ inputs.local == 'true' }}
+      uses: albr21/gha-setup-shields@1.0.0
+      with:
+        image: ${{ inputs.image }}
+        port: ${{ inputs.port }}
+        container-name: ${{ inputs.container-name }}
+        startup-timeout: ${{ inputs.startup-timeout }}
+        command-line-interpreter: ${{ inputs.command-line-interpreter }}
+
+    - name: Create badge
+      id: create-badge
+      uses: albr21/gha-create-shields-badge@1.0.0
+      with:
+        label: ${{ inputs.label }}
+        message: ${{ inputs.message }}
+        color: ${{ inputs.color }}
+        label-color: ${{ inputs.label-color }}
+        logo: ${{ inputs.logo }}
+        logo-color: ${{ inputs.logo-color }}
+        style: ${{ inputs.style }}
+        format: ${{ inputs.format }}
+        base-url: ${{ inputs.local == 'true' && steps.setup-shields.outputs.service-url || inputs.base-url }}
+        command-line-interpreter: ${{ inputs.command-line-interpreter }}
+
+    - name: Deploy badge to target repository
+      uses: albr21/gha-git-push@1.0.0
+      with:
+        files: |-
+          ${{ steps.create-badge.outputs.badge-path }}:${{ inputs.target-path }}
+        target-repo: ${{ inputs.target-repo }}
+        target-branch: ${{ inputs.target-branch }}
+        commit-message: ${{ inputs.commit-message }}
+        commit-author-name: ${{ inputs.commit-author-name }}
+        commit-author-email: ${{ inputs.commit-author-email }}
+        auth-method: ${{ inputs.auth-method }}
+        github-token: ${{ inputs.github-token }}
+        ssh-key: ${{ inputs.ssh-key }}
+        known-hosts: ${{ inputs.known-hosts }}
+        hosts: ${{ inputs.hosts }}
+        ssh-key-types: ${{ inputs.ssh-key-types }}
+        github-hostname: ${{ inputs.github-hostname }}
+        max-retries: ${{ inputs.max-retries }}
+        backoff: ${{ inputs.backoff }}
+        command-line-interpreter: ${{ inputs.command-line-interpreter }}
