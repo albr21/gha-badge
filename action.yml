@@ -217,6 +217,7 @@ runs:
 
     - name: Setup Shields.io-compatible server
       if: ${{ inputs.local == 'true' }}
+      id: setup-shields
       uses: albr21/gha-setup-shields@1.0.0
       with:
         image: ${{ inputs.image }}
